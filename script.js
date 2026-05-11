@@ -175,6 +175,50 @@ const regionData = [
   },
 ];
 
+const regionMapNameById = {
+  seoul: "서울특별시",
+  busan: "부산광역시",
+  daegu: "대구광역시",
+  incheon: "인천광역시",
+  gwangju: "광주광역시",
+  daejeon: "대전광역시",
+  ulsan: "울산광역시",
+  sejong: "세종특별자치시",
+  gyeonggi: "경기도",
+  gangwon: "강원도",
+  chungbuk: "충청북도",
+  chungnam: "충청남도",
+  jeonbuk: "전라북도",
+  jeonnam: "전라남도",
+  gyeongbuk: "경상북도",
+  gyeongnam: "경상남도",
+  jeju: "제주특별자치도",
+};
+
+const mapMarkerOffsetById = {
+  seoul: { x: 10, y: -14 },
+  incheon: { x: -30, y: -2 },
+  gyeonggi: { x: 20, y: 30 },
+  gangwon: { x: 2, y: -10 },
+  sejong: { x: -14, y: 2 },
+  chungnam: { x: -24, y: 18 },
+  daejeon: { x: 20, y: 20 },
+  chungbuk: { x: -2, y: -4 },
+  gwangju: { x: -20, y: 20 },
+  jeonbuk: { x: -8, y: 8 },
+  jeonnam: { x: 18, y: 12 },
+  daegu: { x: 14, y: 10 },
+  gyeongbuk: { x: -4, y: 0 },
+  ulsan: { x: 10, y: 18 },
+  busan: { x: 4, y: 34 },
+  gyeongnam: { x: 12, y: 8 },
+  jeju: { x: 2, y: 6 },
+};
+
+const mapRegionIdByName = Object.fromEntries(
+  Object.entries(regionMapNameById).map(([regionId, mapName]) => [mapName, regionId]),
+);
+
 const metricGrid = document.getElementById("metric-grid");
 const dateTabs = document.getElementById("date-tabs");
 const regionTabs = document.getElementById("region-tabs");
@@ -202,6 +246,7 @@ let currentLocationRegionId = null;
 let liveForecastByDay = {};
 let hasUserSelectedRegion = false;
 let loadingDayId = "today";
+let koreaMapData = null;
 
 function getDateMeta(dayId) {
   const option = dayOptions.find((item) => item.id === dayId) ?? dayOptions[0];
@@ -352,6 +397,146 @@ function formatDustReading(metricData, isLoading = false) {
   return "실시간 미세먼지 수치를 아직 받지 못했습니다.";
 }
 
+function formatMapMarkerValue(metricData, dustState, isLoading = false) {
+  if (isLoading) {
+    return "...";
+  }
+
+  if (metricData?.pm10Avg !== undefined && metricData?.pm10Avg !== null) {
+    return metricData.pm10Avg.toFixed(0);
+  }
+
+  if (dustState.label === "매우 나쁨") {
+    return "매우";
+  }
+
+  return dustState.label;
+}
+
+function getPolygonArea(ring) {
+  let area = 0;
+  for (let i = 0; i < ring.length - 1; i += 1) {
+    const [x1, y1] = ring[i];
+    const [x2, y2] = ring[i + 1];
+    area += x1 * y2 - x2 * y1;
+  }
+  return Math.abs(area / 2);
+}
+
+function getPolygonCentroid(ring) {
+  let areaSum = 0;
+  let centroidX = 0;
+  let centroidY = 0;
+
+  for (let i = 0; i < ring.length - 1; i += 1) {
+    const [x1, y1] = ring[i];
+    const [x2, y2] = ring[i + 1];
+    const cross = x1 * y2 - x2 * y1;
+    areaSum += cross;
+    centroidX += (x1 + x2) * cross;
+    centroidY += (y1 + y2) * cross;
+  }
+
+  if (!areaSum) {
+    const [x, y] = ring[0] ?? [0, 0];
+    return { x, y };
+  }
+
+  return {
+    x: centroidX / (3 * areaSum),
+    y: centroidY / (3 * areaSum),
+  };
+}
+
+function translatePolygon(polygon, deltaLng, deltaLat = 0) {
+  return polygon.map((ring) => ring.map(([lng, lat]) => [lng + deltaLng, lat + deltaLat]));
+}
+
+function sanitizeMapFeatures(features) {
+  return features.map((feature) => {
+    if (feature.properties.name === "인천광역시" && feature.geometry.type === "MultiPolygon") {
+      feature.geometry.coordinates = feature.geometry.coordinates.filter((polygon) => {
+        const outerRing = polygon[0];
+        const area = getPolygonArea(outerRing);
+        const centroid = getPolygonCentroid(outerRing);
+        return !(centroid.x < 126.42 && area < 0.01);
+      });
+    }
+
+    if (feature.properties.name === "경상북도" && feature.geometry.type === "MultiPolygon") {
+      feature.geometry.coordinates = feature.geometry.coordinates.map((polygon) => {
+        const outerRing = polygon[0];
+        const centroid = getPolygonCentroid(outerRing);
+
+        if (centroid.x > 131.3) {
+          return translatePolygon(polygon, -1.05, 0.02);
+        }
+
+        if (centroid.x > 130.45) {
+          return translatePolygon(polygon, -0.62, 0.01);
+        }
+
+        return polygon;
+      });
+    }
+
+    return feature;
+  });
+}
+
+function initializeKoreaMapData() {
+  if (koreaMapData || !window.d3 || !window.topojson || !window.SKOREA_PROVINCES_TOPO) {
+    return;
+  }
+
+  const width = 760;
+  const height = 760;
+  const sourceGeojson = window.topojson.feature(
+    window.SKOREA_PROVINCES_TOPO,
+    window.SKOREA_PROVINCES_TOPO.objects.skorea_provinces_2018_geo,
+  );
+  const geojson = {
+    ...sourceGeojson,
+    features: sanitizeMapFeatures(JSON.parse(JSON.stringify(sourceGeojson.features))),
+  };
+  const projection = window.d3.geoMercator().fitExtent(
+    [
+      [50, 18],
+      [650, 718],
+    ],
+    geojson,
+  );
+  const pathGenerator = window.d3.geoPath().projection(projection);
+  const featuresByRegionId = new Map();
+  const markerPositions = {};
+
+  geojson.features.forEach((feature) => {
+    const regionId = mapRegionIdByName[feature.properties.name];
+    if (regionId) {
+      featuresByRegionId.set(regionId, feature);
+    }
+  });
+
+  regionData.forEach((region) => {
+    const feature = featuresByRegionId.get(region.id);
+    if (!feature) return;
+    const [x, y] = pathGenerator.centroid(feature);
+    const offset = mapMarkerOffsetById[region.id] ?? { x: 0, y: 0 };
+    markerPositions[region.id] = {
+      x: x + offset.x,
+      y: y + offset.y,
+    };
+  });
+
+  koreaMapData = {
+    width,
+    height,
+    features: geojson.features,
+    pathGenerator,
+    markerPositions,
+  };
+}
+
 function renderDateTabs() {
   dateTabs.innerHTML = dayOptions
     .map((day) => {
@@ -423,26 +608,80 @@ function renderTabs() {
 }
 
 function renderMap() {
+  initializeKoreaMapData();
+
+  if (!koreaMapData) {
+    koreaMap.innerHTML = '<div class="map-loading">지도를 준비하는 중입니다.</div>';
+    return;
+  }
+
   const isLoading = isForecastDayLoading(selectedDayId);
-  koreaMap.innerHTML = regionData
-    .map((region) => {
+  const regionStates = Object.fromEntries(
+    regionData.map((region) => {
       const forecast = getRegionForecast(region.id, selectedDayId);
-      const dustState = getMetricState(forecast?.metrics?.dust?.level ?? 1, isLoading);
+      const dustMetric = forecast?.metrics?.dust;
+      const dustState = getMetricState(dustMetric?.level ?? 1, isLoading);
+      const markerValue = formatMapMarkerValue(dustMetric, dustState, isLoading);
+      return [region.id, { dustState, markerValue }];
+    }),
+  );
+
+  const featureMarkup = koreaMapData.features
+    .map((feature) => {
+      const regionId = mapRegionIdByName[feature.properties.name];
+      const stateClass = regionId ? regionStates[regionId].dustState.chipClass : "";
+      const activeClass = regionId && selectedRegionId === regionId ? "active" : "";
+      const dataRegionAttr = regionId ? `data-region="${regionId}"` : "";
+      const className = ["map-region", stateClass, activeClass].filter(Boolean).join(" ");
+      return `<path class="${className}" d="${koreaMapData.pathGenerator(feature)}" ${dataRegionAttr}></path>`;
+    })
+    .join("");
+
+  const markerMarkup = regionData
+    .map((region) => {
+      const markerPosition = koreaMapData.markerPositions[region.id];
+      if (!markerPosition) return "";
+      const { dustState, markerValue } = regionStates[region.id];
+      const badgeWidth = markerValue.length >= 3 ? 56 : 46;
+      const badgeHalfWidth = badgeWidth / 2;
       return `
-        <button
-          class="region-tile ${dustState.tileClass} ${selectedRegionId === region.id ? "active" : ""}"
-          type="button"
-          style="grid-area:${region.grid};"
+        <g
+          class="map-marker-group ${dustState.chipClass} ${selectedRegionId === region.id ? "active" : ""}"
+          transform="translate(${markerPosition.x} ${markerPosition.y})"
           data-region="${region.id}"
+          role="button"
+          tabindex="0"
           aria-pressed="${selectedRegionId === region.id}"
-          aria-label="${region.name} 미세먼지 ${dustState.label}"
+          aria-label="${region.name} 미세먼지 ${markerValue}, ${dustState.label}"
         >
-          <span class="region-name">${region.shortName}</span>
-          <span class="map-level ${dustState.chipClass}">${dustState.label}</span>
-        </button>
+          <text class="map-marker-label" x="0" y="-20">${region.shortName}</text>
+          <rect
+            class="map-marker-pill ${dustState.chipClass}"
+            x="${-badgeHalfWidth}"
+            y="-13"
+            width="${badgeWidth}"
+            height="26"
+            rx="13"
+            ry="13"
+          ></rect>
+          <text class="map-marker-value ${dustState.chipClass}" x="0" y="1">${markerValue}</text>
+        </g>
       `;
     })
     .join("");
+
+  koreaMap.innerHTML = `
+    <svg
+      class="korea-map-svg"
+      viewBox="0 0 ${koreaMapData.width} ${koreaMapData.height}"
+      role="group"
+      aria-label="대한민국 지역별 미세먼지 체감 지도"
+    >
+      ${featureMarkup}
+      <text class="map-sea-label" x="575" y="198">울릉/독도</text>
+      ${markerMarkup}
+    </svg>
+  `;
 }
 
 function updateHeroPanel() {
@@ -546,6 +785,14 @@ function bindSelectionEvents() {
 
     const regionTrigger = event.target.closest("[data-region]");
     if (!regionTrigger) return;
+    selectRegion(regionTrigger.dataset.region);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const regionTrigger = event.target.closest(".map-marker-group[data-region]");
+    if (!regionTrigger) return;
+    event.preventDefault();
     selectRegion(regionTrigger.dataset.region);
   });
 }
