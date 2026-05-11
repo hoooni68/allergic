@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>세상의 모든 비염인들을 위하여</title>
+    <link rel="stylesheet" href="./styles.css?v=20260511-1" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Seasonal Allergy Monitor</p>
+          <h1>세상의 모든 비염인들을 위하여</h1>
+          <p class="hero-description">
+            지역을 선택하면 꽃가루와 황사·미세먼지 위험도를 한 번에 보고,
+            민감한 날을 빠르게 대비할 수 있어요.
+          </p>
+        </div>
+        <div class="hero-panel">
+          <p class="hero-panel-label" id="hero-panel-label">현재 위치 기반</p>
+          <div class="hero-panel-main">
+            <strong id="selected-region-name">서울</strong>
+            <span id="selected-region-dust">황사·미세먼지 나쁨</span>
+          </div>
+          <p class="hero-panel-status" id="location-status">브라우저에서 현재 위치를 확인하는 중이에요.</p>
+          <p class="hero-panel-reading" id="selected-region-reading">미세먼지 수치를 불러오는 중입니다.</p>
+        </div>
+      </header>
+
+      <main class="dashboard">
+        <section class="summary-section" aria-labelledby="detail-title">
+          <aside class="detail-card compact-detail-card" id="detail-card">
+            <p class="detail-kicker compact-kicker">지역별 요약</p>
+            <div class="detail-headline">
+              <h3 id="detail-title">서울</h3>
+              <span class="detail-badge level-1" id="detail-badge">좋음</span>
+            </div>
+            <p class="detail-summary" id="detail-summary">
+              황사·미세먼지가 강해 외출 전 준비가 필요한 상태예요.
+            </p>
+
+            <dl class="detail-list">
+              <div>
+                <dt>참나무 꽃가루</dt>
+                <dd id="oak-level">나쁨</dd>
+              </div>
+              <div>
+                <dt>소나무 꽃가루</dt>
+                <dd id="pine-level">보통</dd>
+              </div>
+              <div id="weed-detail-row">
+                <dt>잡초류 꽃가루</dt>
+                <dd id="weed-level">좋음</dd>
+              </div>
+              <div>
+                <dt>황사·미세먼지</dt>
+                <dd id="dust-level">나쁨</dd>
+              </div>
+            </dl>
+          </aside>
+        </section>
+
+        <section class="date-section" aria-labelledby="date-title">
+          <div class="section-heading compact compact-section-heading">
+            <div>
+              <p class="section-kicker compact-kicker">날짜 선택</p>
+            </div>
+          </div>
+
+          <div class="date-tabs" id="date-tabs" role="tablist" aria-label="날짜 선택 탭"></div>
+        </section>
+
+        <section class="status-section" aria-labelledby="status-title">
+          <div class="section-heading compact-section-heading">
+            <div>
+              <p class="section-kicker compact-kicker">4단계 위험 지표</p>
+            </div>
+            <p class="section-caption">초록 → 노랑 → 주황 → 빨강 그라데이션</p>
+          </div>
+
+          <div class="metric-grid" id="metric-grid" aria-live="polite"></div>
+        </section>
+
+        <section class="region-section" aria-labelledby="region-title">
+          <div class="section-heading compact-section-heading">
+            <div>
+              <p class="section-kicker compact-kicker">지역 선택</p>
+            </div>
+            <p class="section-caption" id="region-title">탭 또는 지도에서 광역시·도를 선택하세요</p>
+          </div>
+
+          <div class="region-tabs" id="region-tabs" role="tablist" aria-label="지역 선택 탭"></div>
+
+          <article class="map-card">
+            <div class="map-card-head">
+              <div>
+                <p class="map-card-kicker">대한민국 권역별 보기</p>
+                <h3>미세먼지 체감 지도</h3>
+              </div>
+              <div class="legend" aria-label="강도 범례">
+                <span class="legend-chip level-1">좋음</span>
+                <span class="legend-chip level-2">보통</span>
+                <span class="legend-chip level-3">나쁨</span>
+                <span class="legend-chip level-4">매우 나쁨</span>
+              </div>
+            </div>
+
+            <div class="korea-map" id="korea-map" aria-live="polite"></div>
+          </article>
+        </section>
+      </main>
+
+      <footer class="info-section">
+        <div class="info-card">
+          <p class="section-kicker">사용 정보</p>
+          <h2>데이터 사용 안내</h2>
+          <p class="info-copy" id="data-source-note">실시간 데이터 연결 상태를 확인하는 중입니다.</p>
+          <p class="info-copy">
+            오늘 미세먼지는 에어코리아 실시간 기준으로 표시하고, 내일과 모레는 기상청 예보 기준으로 표시합니다.
+          </p>
+        </div>
+
+        <div class="info-card">
+          <p class="section-kicker">출처</p>
+          <h2>공식 데이터 출처</h2>
+          <ul class="source-list">
+            <li><a href="https://www.weather.go.kr/w/forecast/life/composite-index.do" target="_blank" rel="noreferrer">기상청 날씨누리 생활기상지수</a></li>
+            <li><a href="https://www.data.go.kr/data/15073861/openapi.do" target="_blank" rel="noreferrer">에어코리아 대기오염정보 OpenAPI</a></li>
+          </ul>
+        </div>
+      </footer>
+    </div>
+
+    <script src="./script.js?v=20260511-2"></script>
+  </body>
+</html>
